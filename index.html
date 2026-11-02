@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Chat Board</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #eef2f7;
+    color: #1f2937;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+  }
+  .board {
+    width: 100%;
+    max-width: 680px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.12);
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 32px);
+    min-height: 420px;
+    overflow: hidden;
+  }
+  header {
+    background: #2563eb;
+    color: #fff;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 { margin: 0; font-size: 1.15rem; }
+  header .btns { display: flex; gap: 8px; }
+  header button {
+    background: rgba(255,255,255,.2);
+    color: #fff;
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+  }
+  header button:hover { background: rgba(255,255,255,.35); }
+
+  #settings {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .85rem;
+  }
+  #settings.open { display: flex; }
+  #settings label { font-weight: bold; color: #334155; }
+  #settings .line { display: flex; gap: 8px; }
+  #settings input { flex: 1; }
+  #settings .hint { color: #64748b; font-size: .75rem; line-height: 1.4; }
+  #settings button {
+    background: #2563eb; color: #fff; border: 0; border-radius: 8px;
+    padding: 0 14px; cursor: pointer; font-size: .85rem;
+  }
+  #settings button.grey { background: #94a3b8; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #f9fafb;
+  }
+  .empty { text-align: center; color: #9ca3af; margin-top: 40px; line-height: 1.6; }
+  .msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #e5e7eb;
+    align-self: flex-start;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .msg.user { background: #2563eb; color: #fff; align-self: flex-end; }
+  .msg.error { background: #fee2e2; color: #991b1b; }
+  .meta { font-size: .72rem; opacity: .7; margin-bottom: 4px; }
+  .text { line-height: 1.5; white-space: pre-wrap; }
+  .text pre {
+    background: #111827; color: #e5e7eb; padding: 8px 10px; border-radius: 8px;
+    overflow-x: auto; margin: 6px 0; white-space: pre; font-size: .85rem;
+  }
+  .text code { background: rgba(0,0,0,.08); padding: 1px 4px; border-radius: 4px; }
+  .typing { font-style: italic; color: #6b7280; }
+
+  form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #e5e7eb; }
+  input, textarea {
+    font: inherit;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    outline: none;
+  }
+  input:focus, textarea:focus { border-color: #2563eb; }
+  #text { flex: 1; resize: none; }
+  .send {
+    background: #2563eb; color: #fff; border: 0; padding: 0 20px;
+    border-radius: 8px; cursor: pointer; font-weight: bold;
+  }
+  .send:hover { background: #1d4ed8; }
+  .send:disabled { background: #93c5fd; cursor: not-allowed; }
+  .note { font-size: .72rem; color: #6b7280; text-align: center; padding: 0 12px 10px; }
+</style>
+</head>
+<body>
+  <div class="board">
+    <header>
+      <h1>🤖 AI Chat Board</h1>
+      <div class="btns">
+        <button id="settingsBtn" type="button">Settings</button>
+        <button id="clearBtn" type="button">Clear chat</button>
+      </div>
+    </header>
+
+    <div id="settings">
+      <label for="apiKey">Gemini API key</label>
+      <div class="line">
+        <input id="apiKey" type="password" placeholder="Paste your key from Google AI Studio" autocomplete="off">
+        <button id="saveKey" type="button">Save</button>
+        <button id="forgetKey" type="button" class="grey">Forget</button>
+      </div>
+      <label for="model">Model</label>
+      <input id="model" list="models" value="gemini-3.8-flash">
+      <datalist id="models">
+        <option value="gemini-3.8-flash">
+        <option value="gemini-3.6-flash">
+        <option value="gemini-3.5-flash-lite">
+      </datalist>
+      <div class="hint">
+        Get a free key at aistudio.google.com/apikey. The key is stored only in this browser
+        and is sent only to Google's API. It is never saved in the website code.
+      </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <form id="form">
+      <textarea id="text" rows="2" placeholder="Ask Gemini anything..." maxlength="2000" required></textarea>
+      <button id="send" class="send" type="submit">Send</button>
+    </form>
+    <div class="note">Powered by the Google Gemini API. Chat history is not saved.</div>
+  </div>
+
+<script>
+  var KEY_STORE = "aichat_api_key";
+  var MODEL_STORE = "aichat_model";
+  var API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
+
+  var box = document.getElementById("messages");
+  var form = document.getElementById("form");
+  var textInput = document.getElementById("text");
+  var sendBtn = document.getElementById("send");
+  var keyInput = document.getElementById("apiKey");
+  var modelInput = document.getElementById("model");
+  var settings = document.getElementById("settings");
+
+  var chat = [];      // [{role: "user"|"model", text: "..."}]
+  var busy = false;
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function fetchStore(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function unstore(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  keyInput.value = fetchStore(KEY_STORE);
+  modelInput.value = fetchStore(MODEL_STORE) || modelInput.value;
+  if (!keyInput.value) settings.classList.add("open");
+
+  /* ---------- rendering ---------- */
+  function addInline(parent, line) {
+    var parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
+    parts.forEach(function (p) {
+      if (!p) return;
+      var el;
+      if (p.indexOf("**") === 0 && p.length > 4) {
+        el = document.createElement("strong"); el.textContent = p.slice(2, -2);
+      } else if (p.charAt(0) === "`" && p.length > 2) {
+        el = document.createElement("code"); el.textContent = p.slice(1, -1);
+      } else {
+        el = document.createTextNode(p);
+      }
+      parent.appendChild(el);
+    });
+  }
+
+  function renderRich(container, text) {
+    var lines = text.split("\n");
+    var inCode = false, codeBuf = [];
+    lines.forEach(function (line, i) {
+      if (line.trim().indexOf("```") === 0) {
+        if (inCode) {
+          var pre = document.createElement("pre");
+          pre.textContent = codeBuf.join("\n");
+          container.appendChild(pre);
+          codeBuf = []; inCode = false;
+        } else { inCode = true; }
+        return;
+      }
+      if (inCode) { codeBuf.push(line); return; }
+      line = line.replace(/^(\s*)[*-]\s+/, "$1• ").replace(/^#{1,6}\s+/, "");
+      addInline(container, line);
+      if (i < lines.length - 1) container.appendChild(document.createTextNode("\n"));
+    });
+    if (inCode && codeBuf.length) {
+      var pre2 = document.createElement("pre");
+      pre2.textContent = codeBuf.join("\n");
+      container.appendChild(pre2);
+    }
+  }
+
+  function bubble(kind, who, text) {
+    var empty = box.querySelector(".empty");
+    if (empty) empty.remove();
+    var div = document.createElement("div");
+    div.className = "msg " + kind;
+    var meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = who + " • " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    var t = document.createElement("div");
+    t.className = "text";
+    if (kind === "ai") renderRich(t, text); else t.textContent = text;
+    div.appendChild(meta);
+    div.appendChild(t);
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  function showEmpty() {
+    box.innerHTML = "";
+    var e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No messages yet. Save your API key in Settings, then ask Gemini a question!";
+    box.appendChild(e);
+  }
+
+  /* ---------- API call ---------- */
+  function friendlyError(status, msg) {
+    if (status === 400 && /API key/i.test(msg)) return "The API key is not valid. Open Settings and paste the key again.";
+    if (status === 401 || status === 403) return "Access denied (" + status + "). Check that your API key is correct and enabled.";
+    if (status === 404) return "Model not found. Open Settings and choose another model name.";
+    if (status === 429) return "Too many requests or quota used up. Wait a minute and try again.";
+    return "Error " + status + ": " + msg;
+  }
+
+  function askGemini() {
+    var key = keyInput.value.trim();
+    var model = modelInput.value.trim() || "gemini-3.8-flash";
+    var body = {
+      contents: chat.slice(-12).map(function (m) {
+        return { role: m.role, parts: [{ text: m.text }] };
+      })
+    };
+    return fetch(API_BASE + encodeURIComponent(model) + ":generateContent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) {
+          var m = (data && data.error && data.error.message) || res.statusText || "Request failed";
+          throw new Error(friendlyError(res.status, m));
+        }
+        var cand = data.candidates && data.candidates[0];
+        var parts = cand && cand.content && cand.content.parts;
+        var out = parts ? parts.map(function (p) { return p.text || ""; }).join("") : "";
+        if (!out) {
+          var why = (data.promptFeedback && data.promptFeedback.blockReason) || (cand && cand.finishReason) || "empty response";
+          throw new Error("Gemini returned no text (" + why + ").");
+        }
+        return out;
+      });
+    });
+  }
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (busy) return;
+    var q = textInput.value.trim();
+    if (!q) return;
+    if (!keyInput.value.trim()) {
+      settings.classList.add("open");
+      keyInput.focus();
+      bubble("error", "System", "Please save your Gemini API key in Settings first.");
+      return;
+    }
+    bubble("user", "You", q);
+    chat.push({ role: "user", text: q });
+    textInput.value = "";
+
+    busy = true; sendBtn.disabled = true;
+    var wait = bubble("ai", "Gemini", "");
+    wait.querySelector(".text").className = "text typing";
+    wait.querySelector(".text").textContent = "Thinking...";
+
+    askGemini().then(function (answer) {
+      wait.remove();
+      chat.push({ role: "model", text: answer });
+      bubble("ai", "Gemini", answer);
+    }).catch(function (err) {
+      wait.remove();
+      chat.pop();   // drop the unanswered question so the next turn stays valid
+      var m = err && err.message ? err.message : String(err);
+      if (m === "Failed to fetch") m = "Network error. Check your internet connection and try again.";
+      bubble("error", "Error", m);
+    }).then(function () {
+      busy = false; sendBtn.disabled = false; textInput.focus();
+    });
+  });
+
+  textInput.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); form.requestSubmit(); }
+  });
+
+  /* ---------- buttons ---------- */
+  document.getElementById("settingsBtn").onclick = function () { settings.classList.toggle("open"); };
+  document.getElementById("saveKey").onclick = function () {
+    store(KEY_STORE, keyInput.value.trim());
+    store(MODEL_STORE, modelInput.value.trim());
+    settings.classList.remove("open");
+  };
+  document.getElementById("forgetKey").onclick = function () {
+    unstore(KEY_STORE); keyInput.value = "";
+  };
+  document.getElementById("clearBtn").onclick = function () {
+    chat = []; showEmpty();
+  };
+
+  showEmpty();
+</script>
+</body>
+</html>
